@@ -19,6 +19,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .console import force_utf8
 from .ocr import TesseractMissing, find_tesseract
 from .office import LegacyDocError
 from .router import SUPPORTED, UnsupportedFile, convert_file
@@ -357,6 +358,7 @@ class App(ttk.Frame):
 def main(argv: list[str] | None = None) -> int:
     import sys
 
+    force_utf8()
     args = argv if argv is not None else sys.argv[1:]
     initial = [Path(a) for a in args if Path(a).exists()]
 

@@ -8,6 +8,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from .console import force_utf8
 from .ocr import TesseractMissing
 from .office import LegacyDocError
 from .router import SUPPORTED, UnsupportedFile, convert_file
@@ -179,21 +180,8 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _force_utf8() -> None:
-    """Console Windows mặc định là cp1252, không in được tiếng Việt lẫn ký hiệu.
-
-    Không ép UTF-8 thì chỉ cần một tên file có dấu là chương trình chết vì
-    UnicodeEncodeError, dù việc chuyển đổi đã chạy xong xuôi.
-    """
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, OSError):
-            pass
-
-
 def main(argv: list[str] | None = None) -> int:
-    _force_utf8()
+    force_utf8()
     args = build_parser().parse_args(argv)
     return args.func(args)
 

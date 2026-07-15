@@ -17,7 +17,18 @@ winget install --id tesseract-ocr.tesseract
 
 ## Dùng
 
-**Cách dễ nhất — `Chuyen-doi.bat`**, không cần gõ lệnh gì:
+### Giao diện web — nhấn đúp là dùng
+
+Nhấn đúp vào **`Mo-giao-dien-web.bat`**. Trình duyệt tự mở, kéo thả tài liệu vào,
+bấm Chuyển đổi. Xem trước markdown ngay trên trang, tải về từng file hoặc tải cả
+gói `.zip`.
+
+Máy chủ chỉ lắng nghe ở `127.0.0.1` — không mở ra mạng LAN, không gọi ra Internet.
+Đừng đóng cửa sổ đen trong lúc đang dùng app; xong việc thì đóng nó lại là server tắt.
+
+### Dòng lệnh — `Chuyen-doi.bat`
+
+Nếu thích chạy hàng loạt hơn:
 
 - **Kéo thả**: kéo file PDF/Word (hoặc cả thư mục) thả vào `Chuyen-doi.bat`
 - **Hoặc nhấn dup** vào nó rồi dán đường dẫn thư mục vào
