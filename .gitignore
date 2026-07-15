@@ -16,3 +16,6 @@ tests/fixtures/
 
 # Cong cu
 .omc/
+
+# Shortcut tao boi tao-shortcut.ps1
+*.lnk

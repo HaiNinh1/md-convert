@@ -17,7 +17,39 @@ winget install --id tesseract-ocr.tesseract
 
 ## Dùng
 
-**Cách dễ nhất — kéo thả:** kéo file PDF/Word (hoặc cả thư mục) thả vào `Chuyen-doi.bat`. Kết quả ra thư mục `out` ngay cạnh.
+**Cách dễ nhất — `Chuyen-doi.bat`**, không cần gõ lệnh gì:
+
+- **Kéo thả**: kéo file PDF/Word (hoặc cả thư mục) thả vào `Chuyen-doi.bat`
+- **Hoặc nhấn dup** vào nó rồi dán đường dẫn thư mục vào
+
+Kết quả ra thư mục `out` ngay cạnh, và nó hỏi có mở thư mục đó không. Thư mục con được quét tự động.
+
+Cuối mỗi lần chạy có bảng tổng kết nói rõ **file nào không chuyển được và vì sao**:
+
+```
+==============================================================
+  Thành công : 5/7 file
+  Thất bại   : 2/7 file
+  Kết quả    : C:\Works\OCR2\md-convert\out
+==============================================================
+
+CÁC FILE KHÔNG CHUYỂN ĐƯỢC:
+
+  ✗ File hỏng.pdf
+      lý do: FileDataError: Failed to open file ...
+      nằm ở: C:\Works	hu-that
+  ✗ Tài liệu cũ.doc
+      lý do: định dạng .doc đời cũ, cần chuyển sang .docx trước
+      nằm ở: C:\Works	hu-that
+```
+
+**Giao diện đồ hoạ** (nếu thích cửa sổ hơn dòng lệnh):
+
+```bash
+python -m mdconvert.gui
+# hoac tao shortcut mo bang mot cu click:
+powershell -ExecutionPolicy Bypass -File tao-shortcut.ps1
+```
 
 **Dòng lệnh** (chạy được từ bất kỳ thư mục nào sau khi `pip install -e .`):
 

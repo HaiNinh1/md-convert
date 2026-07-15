@@ -45,7 +45,8 @@ def plan_outputs(inputs: list[Path], out_dir: Path) -> dict[Path, Path]:
     return mapping
 
 
-def convert_one(src: Path, out_dir: Path, args, dest: Path | None = None) -> bool:
+def convert_one(src: Path, out_dir: Path, args, dest: Path | None = None) -> str | None:
+    """Chuyển một file. Trả về None nếu thành công, hoặc lý do hỏng nếu thất bại."""
     started = time.time()
     dest = dest or out_dir / f"{src.stem}.md"
     print(f"→ {src.name}")
@@ -67,21 +68,21 @@ def convert_one(src: Path, out_dir: Path, args, dest: Path | None = None) -> boo
             )
         md, stats = convert_file(src, out_dir, **kw)
     except LegacyDocError as e:
-        print(f"  ✗ {e}", file=sys.stderr)
-        return False
+        print(f"  ✗ {e}")
+        return "định dạng .doc đời cũ, cần chuyển sang .docx trước"
     except UnsupportedFile as e:
-        print(f"  ✗ {e}", file=sys.stderr)
-        return False
+        print(f"  ✗ {e}")
+        return "định dạng không hỗ trợ"
     except TesseractMissing as e:
-        print(f"  ✗ {src.name} là bản scan nên cần OCR, nhưng: {e}", file=sys.stderr)
-        return False
+        print(f"  ✗ Là bản scan nên cần OCR, nhưng: {e}")
+        return "là PDF scan nhưng chưa cài Tesseract"
     except Exception as e:  # noqa: BLE001
-        print(f"  ✗ lỗi khi xử lý {src.name}: {type(e).__name__}: {e}", file=sys.stderr)
-        return False
+        print(f"  ✗ Lỗi: {type(e).__name__}: {e}")
+        return f"{type(e).__name__}: {e}"
 
     if not md.strip():
-        print(f"  ✗ {src.name}: không trích được nội dung nào", file=sys.stderr)
-        return False
+        print("  ✗ Không trích được nội dung nào")
+        return "file rỗng hoặc không đọc được nội dung"
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(md, encoding="utf-8")
@@ -106,7 +107,7 @@ def convert_one(src: Path, out_dir: Path, args, dest: Path | None = None) -> boo
         detail = ", ".join(bits)
 
     print(f"  ✓ {dest.name}  ({detail}, {took:.1f}s)")
-    return True
+    return None
 
 
 def cmd_convert(args) -> int:
@@ -117,10 +118,31 @@ def cmd_convert(args) -> int:
 
     out_dir = Path(args.out)
     plan = plan_outputs(inputs, out_dir)
-    ok = sum(convert_one(src, out_dir, args, plan[src]) for src in inputs)
-    failed = len(inputs) - ok
-    print(f"\nXong: {ok}/{len(inputs)} file → {out_dir}")
-    return 1 if failed and ok == 0 else 0
+    print(f"Tìm thấy {len(inputs)} file. Bắt đầu chuyển đổi...\n")
+
+    failures: list[tuple[Path, str]] = []
+    for src in inputs:
+        reason = convert_one(src, out_dir, args, plan[src])
+        if reason:
+            failures.append((src, reason))
+
+    ok = len(inputs) - len(failures)
+    print("\n" + "=" * 62)
+    print(f"  Thành công : {ok}/{len(inputs)} file")
+    print(f"  Thất bại   : {len(failures)}/{len(inputs)} file")
+    print(f"  Kết quả    : {out_dir.resolve()}")
+    print("=" * 62)
+
+    # Liệt kê rõ file nào hỏng và vì sao. Chỉ báo "8/10" thì người dùng phải tự
+    # cuộn ngược lên tìm giữa hàng trăm dòng log của một thư mục lớn.
+    if failures:
+        print("\nCÁC FILE KHÔNG CHUYỂN ĐƯỢC:\n")
+        for src, reason in failures:
+            print(f"  ✗ {src.name}")
+            print(f"      lý do: {reason}")
+            print(f"      nằm ở: {src.parent}")
+        print()
+    return 1 if failures and ok == 0 else 0
 
 
 def cmd_watch(args) -> int:

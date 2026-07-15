@@ -224,6 +224,64 @@ def test_khong_trung_ten_thi_giu_ten_sach(fixtures, tmp_path):
     assert plan[fixtures["docx"]].name == "sample.md"
 
 
+def test_cli_chay_het_mot_thu_muc(fixtures, tmp_path, capsys):
+    """Từng hỏng: đổi convert_one sang trả về lý do hỏng thay vì bool, nhưng
+    cmd_convert vẫn còn `sum(...)` cũ nên nổ TypeError ngay lệnh đầu tiên. Cả bộ
+    test 20/20 vẫn xanh vì KHÔNG test nào chạy qua cmd_convert — chỉ chạy thật
+    trên thư mục mới lộ."""
+    from mdconvert.cli import main
+
+    src = tmp_path / "vao"
+    src.mkdir()
+    for key in ("pdf", "docx", "xlsx"):
+        (src / fixtures[key].name).write_bytes(fixtures[key].read_bytes())
+
+    out = tmp_path / "ra"
+    code = main(["convert", str(src), "-o", str(out)])
+    printed = capsys.readouterr().out
+
+    assert code == 0
+    assert "Thành công : 3/3 file" in printed
+    assert "Thất bại   : 0/3 file" in printed
+    assert len(list(out.glob("*.md"))) == 3
+
+
+def test_cli_bao_ro_file_nao_hong(tmp_path, capsys):
+    """Báo cáo phải nói rõ file nào hỏng và vì sao, không chỉ đếm số."""
+    from mdconvert.cli import main
+
+    src = tmp_path / "vao"
+    src.mkdir()
+    (src / "cu.doc").write_bytes(b"\xd0\xcf\x11\xe0" + b"\x00" * 64)
+    (src / "hong.pdf").write_bytes(b"%PDF-1.4 khong phai pdf that")
+
+    code = main(["convert", str(src), "-o", str(tmp_path / "ra")])
+    printed = capsys.readouterr().out
+
+    assert code == 1
+    assert "Thất bại   : 2/2 file" in printed
+    assert "CÁC FILE KHÔNG CHUYỂN ĐƯỢC" in printed
+    assert "cu.doc" in printed and "hong.pdf" in printed
+
+
+def test_cli_file_hong_khong_lam_dung_ca_lo(fixtures, tmp_path, capsys):
+    """Một file hỏng giữa lô không được làm chết các file còn lại."""
+    from mdconvert.cli import main
+
+    src = tmp_path / "vao"
+    src.mkdir()
+    (src / "tot.pdf").write_bytes(fixtures["pdf"].read_bytes())
+    (src / "hong.pdf").write_bytes(b"%PDF-1.4 rac")
+    (src / "tot2.docx").write_bytes(fixtures["docx"].read_bytes())
+
+    out = tmp_path / "ra"
+    main(["convert", str(src), "-o", str(out)])
+    printed = capsys.readouterr().out
+
+    assert "Thành công : 2/3 file" in printed
+    assert {p.name for p in out.glob("*.md")} == {"tot.md", "tot2.md"}
+
+
 def test_body_size_tinh_theo_so_ky_tu():
     """Cỡ thân bài phải tính theo số KÝ TỰ, không theo số dòng: một trang bìa có
     vài dòng tiêu đề to sẽ chiếm đa số dòng nhưng rất ít ký tự."""
