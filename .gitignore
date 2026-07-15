@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Ket qua chuyen doi
+out/
+tests/out*/
+tests/inbox/
+
+# File mau sinh tu dong (xem tests/conftest.py)
+tests/fixtures/
+
+# Cong cu
+.omc/

@@ -1,0 +1,10 @@
+* text=auto
+
+# File .bat BAT BUOC dung CRLF. Khong ep o day thi may nao co core.autocrlf=false
+# (hoac clone tren Linux/Mac) se nhan file LF, cmd.exe phan tich sai ca file va
+# bao loi vo nghia kieu 'errorlevel' is not recognized.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Giu LF cho script shell
+*.sh text eol=lf

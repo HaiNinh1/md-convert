@@ -1,0 +1,17 @@
+# Lõi — đọc PDF, Word, Excel
+pymupdf>=1.24        # PDF: text + toạ độ + font + dò bảng + render trang. AGPL, chỉ dùng nội bộ.
+mammoth>=1.8         # DOCX -> HTML ngữ nghĩa, đọc thẳng style Word
+markdownify>=0.13    # HTML -> Markdown
+openpyxl>=3.1        # Excel -> bảng markdown
+watchdog>=4.0        # theo dõi thư mục cho chế độ tự động
+
+# OCR cho PDF scan
+pytesseract>=0.3.10  # cầu nối tới Tesseract
+pillow>=10.0         # đưa ảnh trang vào Tesseract
+
+# Ngoài pip, cần cài Tesseract một lần:
+#     winget install --id tesseract-ocr.tesseract
+#
+# Không dùng rapidocr-onnxruntime dù cài bằng pip là xong: model latin_PP-OCRv3
+# đi kèm thiếu 53/74 ký tự tiếng Việt trong từ điển đầu ra nên không thể xuất ra
+# dấu tiếng Việt. Xem phần đầu mdconvert/ocr.py.
