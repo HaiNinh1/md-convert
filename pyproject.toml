@@ -6,7 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "md-convert"
 version = "0.1.0"
 description = "Chuyển PDF, PDF scan, Word, Excel sang Markdown. Offline, không dùng API trả phí."
+readme = "README.md"
 requires-python = ">=3.10"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 dependencies = [
     "pymupdf>=1.24",
     "mammoth>=1.8",

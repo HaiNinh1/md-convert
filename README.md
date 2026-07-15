@@ -120,7 +120,7 @@ Ghi lại để người sau đừng "dọn dẹp" mấy con số này rồi là
 - **OCR không nhận biết chữ đậm/nghiêng**, nên bản scan mất định dạng inline. PDF số thì giữ đủ.
 - **Tesseract còn nhầm dấu gần giống nhau**: "triển"→"triền", "Bảng chi"→"Báng chỉ". Khoảng 95% ký tự đúng trên bản scan sạch. Tăng `--dpi 400` giúp được với bản mờ.
 - **Công thức toán, sơ đồ, chữ viết tay** không xử lý.
-- **PyMuPDF là AGPL v3** — dùng nội bộ thoải mái. Nếu về sau muốn phát hành hoặc bán, phải mở mã nguồn hoặc thay bằng `pdfplumber` + `pypdfium2` (MIT/BSD).
+- **Giấy phép AGPL v3 lan sang mọi dự án dùng lại code này**, vì PyMuPDF là AGPL. Xem mục [Giấy phép](#giấy-phép) ở cuối để biết hệ quả cụ thể.
 
 ## Test
 
@@ -129,3 +129,18 @@ python -m pytest tests/ -q
 ```
 
 Mỗi test ứng với một lỗi **đã thật sự xảy ra** khi dựng dự án, không phải lỗi giả định. File mẫu được sinh tự động ở lần chạy đầu. Test cần OCR sẽ tự bỏ qua nếu chưa cài Tesseract.
+
+## Giấy phép
+
+**AGPL-3.0-or-later** — xem file [LICENSE](LICENSE).
+
+Dự án bắt buộc phải mang giấy phép này vì nó dùng **PyMuPDF**, vốn là AGPL v3, và
+AGPL có tính lan truyền. Hệ quả cụ thể:
+
+- Dùng cho cá nhân hoặc nội bộ công ty: thoải mái, không ràng buộc gì.
+- Phân phối lại, hoặc chạy nó thành dịch vụ cho người khác dùng qua mạng: phải
+  công khai mã nguồn (kể cả phần bạn sửa) dưới AGPL v3.
+
+Nếu cần giấy phép dễ thở hơn (ví dụ MIT, để bán hoặc nhúng vào sản phẩm đóng),
+phải thay PyMuPDF bằng `pdfplumber` + `pypdfium2` (MIT/BSD) và viết lại
+`mdconvert/pdf.py`. Đánh đổi: khả năng dò bảng yếu hơn và chạy chậm hơn.
