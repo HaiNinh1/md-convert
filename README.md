@@ -37,10 +37,10 @@ CÁC FILE KHÔNG CHUYỂN ĐƯỢC:
 
   ✗ File hỏng.pdf
       lý do: FileDataError: Failed to open file ...
-      nằm ở: C:\Works	hu-that
+      nằm ở: D:\Tai lieu
   ✗ Tài liệu cũ.doc
       lý do: định dạng .doc đời cũ, cần chuyển sang .docx trước
-      nằm ở: C:\Works	hu-that
+      nằm ở: D:\Tai lieu\Hop dong
 ```
 
 **Giao diện đồ hoạ** (nếu thích cửa sổ hơn dòng lệnh):
