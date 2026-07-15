@@ -194,14 +194,11 @@ def test_xlsx(fixtures, tmp_path):
     assert "| Tháng | Doanh thu |" in md
 
 
-def test_doc_doi_cu_bao_loi_ro_rang(tmp_path):
-    """.doc nhị phân không phải ZIP/XML — phải báo cách xử lý, không đổ stack."""
-    from mdconvert.office import LegacyDocError
-
-    fake = tmp_path / "cu.doc"
-    fake.write_bytes(b"\xd0\xcf\x11\xe0" + b"\x00" * 64)  # chữ ký OLE2
-    with pytest.raises(LegacyDocError, match="convert-to docx"):
-        convert_file(fake, tmp_path)
+# Test cho file .doc đời cũ nằm ở tests/test_legacy_doc.py.
+#
+# Ở đây từng có test khoá hành vi "báo lỗi kèm lệnh soffice để người dùng tự
+# convert". Hành vi đó đã bỏ: app tự chuyển .doc qua Microsoft Word (hoặc
+# LibreOffice) rồi đi tiếp, người dùng không phải làm gì.
 
 
 # --------------------------------------------------------------------------

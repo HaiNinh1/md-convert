@@ -19,6 +19,8 @@ dependencies = [
     "pytesseract>=0.3.10",
     "pillow>=10.0",
     "flask>=3.0",
+    # Doc file .doc doi cu qua Microsoft Word. Chi Windows.
+    "pywin32>=306; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

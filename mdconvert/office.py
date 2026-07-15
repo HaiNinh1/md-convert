@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import itertools
 import re
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -100,14 +101,38 @@ def is_legacy_doc(path: Path) -> bool:
 
 
 def read_docx(path: Path, assets_dir: Path, extract_images: bool = True) -> tuple[str, dict]:
+    """Đọc .docx. File .doc đời cũ được tự động chuyển sang .docx trước.
+
+    Không bắt người dùng tự convert thủ công: máy Windows văn phòng gần như luôn
+    có sẵn Microsoft Word, cứ nhờ nó làm rồi đi tiếp là xong.
+    """
     if is_legacy_doc(path):
-        raise LegacyDocError(
-            f"{path.name} là định dạng Word 97-2003 (.doc) nhị phân, không phải .docx. "
-            f"Hãy mở bằng Word/LibreOffice rồi lưu lại thành .docx, "
-            f"hoặc chạy: soffice --headless --convert-to docx \"{path}\""
-        )
+        from . import legacy_doc
+
+        with tempfile.TemporaryDirectory(prefix="doc2docx-") as tmp:
+            converted = Path(tmp) / f"{path.stem}.docx"
+            try:
+                tool = legacy_doc.to_docx(path, converted)
+            except legacy_doc.NotAWordFile as e:
+                raise LegacyDocError(f"Không đọc được '{path.name}'. {e}") from e
+            except legacy_doc.NoConverter as e:
+                raise LegacyDocError(
+                    f"'{path.name}' là định dạng Word 97-2003 (.doc) nhị phân. {e}"
+                ) from e
+            md, stats = _read_docx(converted, assets_dir, extract_images)
+            stats["converted_from"] = ".doc"
+            stats["converted_by"] = tool
+            return md, stats
+
+    return _read_docx(path, assets_dir, extract_images)
+
+
+def _read_docx(path: Path, assets_dir: Path, extract_images: bool) -> tuple[str, dict]:
     if not zipfile.is_zipfile(path):
-        raise LegacyDocError(f"{path.name} không phải file .docx hợp lệ (không đọc được cấu trúc ZIP).")
+        raise LegacyDocError(
+            f"'{path.name}' không phải file .docx hợp lệ — không đọc được cấu trúc ZIP. "
+            f"File có thể bị hỏng hoặc chỉ được đổi tên phần đuôi."
+        )
 
     opts: dict = {"style_map": STYLE_MAP}
     if extract_images:

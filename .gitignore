@@ -11,6 +11,14 @@ out/
 tests/out*/
 tests/inbox/
 
+# Tai lieu that dem ra thu — TUYET DOI khong duoc commit len repo public
+tests/real/
+tests/that/
+*.doc
+*.docx
+*.pdf
+*.xlsx
+
 # File mau sinh tu dong (xem tests/conftest.py)
 tests/fixtures/
 

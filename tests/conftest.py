@@ -105,6 +105,60 @@ def _build_xlsx(dest: Path) -> None:
     wb.save(dest)
 
 
+def _build_legacy_doc(dest: Path) -> bool:
+    """Tạo file .doc nhị phân thật (Word 97-2003). Cần có Microsoft Word.
+
+    Cách làm: dựng .docx bằng python-docx rồi nhờ Word lưu ngược thành .doc.
+    KHÔNG dựng thẳng bằng Word COM — đã thử và mất sạch nội dung, chỉ còn mỗi
+    bảng, vì Paragraphs.Add() rồi gán Range.Text hành xử khác hẳn mong đợi.
+    """
+    try:
+        import pythoncom
+        import win32com.client
+        from docx import Document
+    except ImportError:
+        return False
+
+    tmp_docx = dest.with_suffix(".tam.docx")
+    d = Document()
+    d.add_heading("Giải pháp và Phương pháp luận", level=1)
+    d.add_paragraph("Đoạn mở đầu của tài liệu Word 97-2003.")
+    d.add_heading("1. Phạm vi áp dụng", level=2)
+    d.add_paragraph("Nội dung mô tả phạm vi triển khai hệ thống.")
+    p = d.add_paragraph("Dòng có ")
+    p.add_run("chữ đậm").bold = True
+    p.add_run(" và ")
+    p.add_run("chữ nghiêng").italic = True
+    p.add_run(" trộn lẫn.")
+    d.add_paragraph("Mục thứ nhất", style="List Bullet")
+    d.add_paragraph("Mục thứ hai", style="List Bullet")
+    t = d.add_table(rows=2, cols=3)
+    t.style = "Table Grid"
+    for c, v in zip(t.rows[0].cells, ["Hạng mục", "Giá trị", "Ghi chú"]):
+        c.text = v
+    for c, v in zip(t.rows[1].cells, ["Máy chủ", "12 triệu", "Đã duyệt"]):
+        c.text = v
+    d.save(tmp_docx)
+
+    try:
+        pythoncom.CoInitialize()
+        word = win32com.client.DispatchEx("Word.Application")
+        word.Visible = False
+        word.DisplayAlerts = 0
+        try:
+            doc = word.Documents.Open(str(tmp_docx.resolve()), AddToRecentFiles=False)
+            doc.SaveAs2(str(dest.resolve()), FileFormat=0)  # 0 = .doc 97-2003
+            doc.Close(SaveChanges=0)
+        finally:
+            word.Quit()
+            pythoncom.CoUninitialize()
+    except Exception:  # noqa: BLE001
+        return False
+    finally:
+        tmp_docx.unlink(missing_ok=True)
+    return dest.exists()
+
+
 @pytest.fixture(scope="session")
 def fixtures() -> dict[str, Path]:
     FIXTURES.mkdir(parents=True, exist_ok=True)
@@ -122,4 +176,9 @@ def fixtures() -> dict[str, Path]:
         _build_docx(paths["docx"])
     if not paths["xlsx"].exists():
         _build_xlsx(paths["xlsx"])
+
+    # .doc cần Microsoft Word để tạo; máy nào không có thì test liên quan tự bỏ qua.
+    doc = FIXTURES / "tailieu_cu.doc"
+    if doc.exists() or _build_legacy_doc(doc):
+        paths["doc"] = doc
     return paths

@@ -133,7 +133,12 @@ Các cờ hay dùng:
 
 `.docx` là file ZIP chứa XML, trong đó Word **ghi thẳng** `<w:pStyle w:val="Heading1"/>`, `<w:b/>`, `<w:tbl>`. Không phải đoán gì cả — chỉ việc đọc. Đó là lý do nhánh Word không đi qua tầng layout.
 
-`.doc` đời cũ (Word 97-2003) là định dạng nhị phân OLE2, không phải ZIP. Chương trình phát hiện bằng chữ ký file và báo lệnh LibreOffice để convert, thay vì đổ stack trace.
+`.doc` đời cũ (Word 97-2003) là định dạng nhị phân OLE2, không phải ZIP — không có bộ đọc thuần Python nào đủ tin cậy. App **tự chuyển** nó sang `.docx` rồi đi tiếp bằng đường cũ, người dùng không phải làm gì:
+
+1. **Microsoft Word** qua COM — bản gốc của định dạng này nên trung thực nhất, và máy Windows văn phòng gần như luôn có
+2. **LibreOffice** headless — dự phòng khi không có Word
+
+Chỉ khi máy không có cả hai thì mới báo lỗi kèm cách cài. Dùng `DispatchEx` để tạo tiến trình Word **riêng**, không đụng vào cửa sổ Word bạn đang mở — nhờ vậy convert được cả file đang mở dở.
 
 ## Những cái bẫy đã gặp (và đã có test khoá)
 
@@ -152,6 +157,10 @@ Ghi lại để người sau đừng "dọn dẹp" mấy con số này rồi là
 - **`HEADING_MAX_SHARE` đừng siết.** Từng để 0.12 và tài liệu 1 trang hỏng ngay: tiêu đề 15pt chiếm 12.3% ký tự (bình thường với văn bản ngắn) nên bị loại rồi tụt xuống thành danh sách. Tài liệu càng ngắn, tiêu đề càng chiếm tỉ lệ cao.
 
 - **Ngưỡng tách đoạn phải đo trên dòng cùng cỡ thân bài.** Gộp cả khoảng cách trước tiêu đề và giữa ô bảng vào thì trung vị bị kéo lên, ngưỡng cao đến mức không đoạn nào tách được.
+
+- **Word không từ chối file .doc rác — nó đọc byte nhị phân thành chữ.** Đưa nó một file hỏng, nó không báo lỗi mà lặng lẽ mở như văn bản thuần, cho ra markdown `ﾐﾏ・` (chính là chữ ký OLE2 `D0 CF 11 E0` bị diễn giải thành chữ) — và app báo THÀNH CÔNG. Sai mà báo đúng còn tệ hơn báo lỗi. Chốt chặn: chính Word tự khai qua `SaveFormat` — file thật cho `0` (wdFormatDocument97), file rác cho `7` (wdFormatEncodedText).
+
+- **Phải `Quit()` Word kể cả khi lỗi**, không thì `WINWORD.EXE` ẩn tích tụ dần cho tới khi hết RAM. Và phải `CoInitialize()` trên mỗi luồng: Flask xử lý request trong luồng riêng, không khởi tạo COM là nổ "CoInitialize has not been called".
 
 - **`Chuyen-doi.bat` bắt buộc dùng xuống dòng CRLF.** Đa số trình soạn thảo và công cụ sinh file mặc định ghi LF kiểu Unix; cmd.exe gặp LF thuần là phân tích sai cả file và báo những lỗi vô nghĩa như `'errorlevel' is not recognized`. Sửa file .bat xong nhớ kiểm tra lại xuống dòng.
 
