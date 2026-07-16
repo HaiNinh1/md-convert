@@ -102,6 +102,99 @@ def _fix_empty_table_headers(md: str) -> str:
     return "\n".join(out)
 
 
+# Đôn đoạn văn có đánh số mục lên thành tiêu đề, và đánh lại cấp cho nhất quán.
+#
+# Vì sao cần: nhánh Word đọc thẳng style mà Word ghi sẵn — đúng về nguyên tắc,
+# nhưng tài liệu thật thường dùng Heading style nửa vời. Đo trên một hồ sơ thầu
+# thật: "3.1." và "3.1.1." chỉ được bôi đậm tay nên ra đoạn văn thường, trong khi
+# "3.1.1.1." lại có Heading style. 22 dòng lẽ ra là tiêu đề bị bỏ lỡ.
+#
+# Cách đánh số CHÍNH LÀ phân cấp, và nó không nhiễu: "3.1.1." chắc chắn sâu hơn
+# "3.1." đúng một cấp, không cần đo cỡ chữ hay đoán gì. Nên lấy nó làm chuẩn,
+# đánh lại cấp cho cả những tiêu đề Word đã đặt — vì chính chúng cũng lệch
+# (4 cấp số ra H3, 5 cấp số ra H5).
+
+# Số mục phải có ÍT NHẤT 2 cấp, tức phải chứa dấu chấm giữa các số.
+# Đây là chốt chặn quan trọng nhất: "1. Mỗi đội khảo sát gồm 01 cán bộ." là MỤC
+# DANH SÁCH chứ không phải tiêu đề. Yêu cầu ≥2 cấp thì nó tự bị loại.
+NUMBERED_LINE_RE = re.compile(
+    r"^(?P<hashes>#{1,6})?\s*"
+    r"(?P<bold>\*\*)?\s*"
+    r"(?P<num>\d+(?:\.\d+)+)\.?"
+    r"\s+"
+    r"(?P<text>\S.*?)"
+    r"\s*(?(bold)\*\*|)\s*$"
+)
+# Tiêu đề là cái tên, không phải câu văn. Hai ngưỡng này để loại đoạn văn mở đầu
+# bằng số mục, ví dụ "3.3. Theo quy định tại mục 3.1. của hợp đồng, nhà thầu
+# phải hoàn thành toàn bộ công tác khảo sát và bàn giao hồ sơ trước thời hạn."
+MAX_HEADING_TEXT = 100
+MAX_TITLE_TEXT = 150
+
+# Mục danh sách: dấu PHẢI đi kèm khoảng trắng. "**Đậm**" không phải danh sách.
+SKIP_LINE_RE = re.compile(r"^([-*+]\s|\d+[.)]\s)")
+
+
+def _numbering_depth(num: str) -> int:
+    return num.rstrip(".").count(".") + 1
+
+
+def promote_numbered_headings(md: str) -> tuple[str, int]:
+    """Trả về (markdown đã sửa, số dòng được đôn lên tiêu đề)."""
+    lines = md.split("\n")
+    out: list[str] = []
+    promoted = 0
+    in_code = False
+    seen_body = False
+
+    for line in lines:
+        s = line.strip()
+
+        if s.startswith("```"):
+            in_code = not in_code
+            out.append(line)
+            continue
+        # Trong khối mã, bảng, trích dẫn hay mục danh sách thì không đụng vào.
+        #
+        # Phải khớp "dấu + KHOẢNG TRẮNG", không được chỉ so ký tự đầu: chữ đậm
+        # "**Tiêu đề**" cũng mở đầu bằng '*' y như mục danh sách "* mục", nên so
+        # mỗi ký tự đầu là nuốt luôn cả tiêu đề bôi đậm.
+        if in_code or s.startswith(("|", ">")) or SKIP_LINE_RE.match(s):
+            out.append(line)
+            if s:
+                seen_body = True
+            continue
+        if not s:
+            out.append(line)
+            continue
+
+        # Tiêu đề tài liệu: dòng chữ đầu tiên, bôi đậm toàn bộ, ngắn.
+        if not seen_body:
+            m = re.fullmatch(r"\*\*(?P<text>\S.*?)\*\*", s)
+            if m and len(m.group("text")) <= MAX_TITLE_TEXT and not m.group("text").endswith("."):
+                out.append(f"# {m.group('text')}")
+                promoted += 1
+                seen_body = True
+                continue
+
+        m = NUMBERED_LINE_RE.match(s)
+        if m:
+            text = m.group("text").rstrip("*").strip()
+            # Tiêu đề kết thúc bằng dấu chấm gần như luôn là câu văn.
+            if text and len(text) <= MAX_HEADING_TEXT and not text.endswith("."):
+                level = min(6, _numbering_depth(m.group("num")))
+                if not m.group("hashes"):
+                    promoted += 1
+                out.append(f"{'#' * level} {m.group('num').rstrip('.')}. {text}")
+                seen_body = True
+                continue
+
+        out.append(line)
+        seen_body = True
+
+    return "\n".join(out), promoted
+
+
 def is_legacy_doc(path: Path) -> bool:
     """.docx là ZIP; .doc đời cũ thì không. Kiểm tra bằng chữ ký file, không tin đuôi."""
     try:
@@ -166,6 +259,7 @@ def _read_docx(path: Path, assets_dir: Path, extract_images: bool) -> tuple[str,
         strip=strip,
     )
     md = _fix_empty_table_headers(md)
+    md, promoted = promote_numbered_headings(md)
     md = re.sub(r"\n{3,}", "\n\n", md).strip() + "\n"
 
     warnings = [m.message for m in result.messages if m.type == "warning"]
@@ -173,6 +267,7 @@ def _read_docx(path: Path, assets_dir: Path, extract_images: bool) -> tuple[str,
         "source": "docx",
         "warnings": len(warnings),
         "warning_sample": warnings[:5],
+        "promoted_headings": promoted,
     }
     return md, stats
 

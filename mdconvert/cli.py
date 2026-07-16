@@ -91,8 +91,10 @@ def convert_one(src: Path, out_dir: Path, args, dest: Path | None = None) -> str
     took = time.time() - started
     if stats.get("source") == "docx":
         detail = "Word"
-        if stats.get("warnings"):
-            detail += f", {stats['warnings']} cảnh báo"
+        if stats.get("converted_from") == ".doc":
+            detail += f" (.doc, chuyển qua {stats.get('converted_by', '?')})"
+        if stats.get("promoted_headings"):
+            detail += f", bù {stats['promoted_headings']} tiêu đề"
     elif stats.get("source") == "xlsx":
         detail = f"Excel, {stats.get('sheets', 0)} sheet"
     else:

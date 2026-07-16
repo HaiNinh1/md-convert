@@ -443,7 +443,12 @@ def _friendly(exc: Exception, tmpdir: Path, name: str) -> str:
 
 def _describe(stats: dict) -> str:
     if stats.get("source") == "docx":
-        return "Word"
+        bits = ["Word"]
+        if stats.get("converted_from") == ".doc":
+            bits.append(f".doc qua {stats.get('converted_by', '?')}")
+        if stats.get("promoted_headings"):
+            bits.append(f"bù {stats['promoted_headings']} tiêu đề")
+        return ", ".join(bits)
     if stats.get("source") == "xlsx":
         return f"Excel, {stats.get('sheets', 0)} sheet"
     bits = [f"{stats.get('pages', 0)} trang"]

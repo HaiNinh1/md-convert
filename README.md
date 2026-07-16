@@ -138,6 +138,16 @@ Các cờ hay dùng:
 
 `.docx` là file ZIP chứa XML, trong đó Word **ghi thẳng** `<w:pStyle w:val="Heading1"/>`, `<w:b/>`, `<w:tbl>`. Không phải đoán gì cả — chỉ việc đọc. Đó là lý do nhánh Word không đi qua tầng layout.
 
+**Trừ một chỗ: cấp tiêu đề.** Tài liệu thật hay dùng Heading style nửa vời — người soạn chỉ bôi đậm tay cho `3.1.` và `3.1.1.`, còn `3.1.1.1.` mới dùng Heading style. Nên `promote_numbered_headings()` lấy **chính cách đánh số** làm phân cấp, vì nó không nhiễu: `3.1.1.` chắc chắn sâu hơn `3.1.` đúng một cấp. Cấp = số cấp trong số mục, áp cho cả tiêu đề Word đã đặt (vì chính chúng cũng lệch: 4 cấp số ra H3 nhưng 5 cấp số ra H5).
+
+Ba chốt chặn để không đôn nhầm:
+
+| Dòng | Xử lý | Vì sao |
+|---|---|---|
+| `3.1. Hiểu rõ mục đích gói thầu` | → `##` | số mục 2 cấp, ngắn, không kết câu |
+| `1. Mỗi đội khảo sát gồm 01 cán bộ.` | giữ nguyên | chỉ 1 cấp số — là **mục danh sách** |
+| `3.3. Theo quy định tại mục 3.1. của hợp đồng, nhà thầu phải...` | giữ nguyên | quá dài và kết thúc bằng dấu chấm — là **câu văn** |
+
 `.doc` đời cũ (Word 97-2003) là định dạng nhị phân OLE2, không phải ZIP — không có bộ đọc thuần Python nào đủ tin cậy. App **tự chuyển** nó sang `.docx` rồi đi tiếp bằng đường cũ, người dùng không phải làm gì:
 
 1. **Microsoft Word** qua COM — bản gốc của định dạng này nên trung thực nhất, và máy Windows văn phòng gần như luôn có
@@ -162,6 +172,8 @@ Ghi lại để người sau đừng "dọn dẹp" mấy con số này rồi là
 - **`HEADING_MAX_SHARE` đừng siết.** Từng để 0.12 và tài liệu 1 trang hỏng ngay: tiêu đề 15pt chiếm 12.3% ký tự (bình thường với văn bản ngắn) nên bị loại rồi tụt xuống thành danh sách. Tài liệu càng ngắn, tiêu đề càng chiếm tỉ lệ cao.
 
 - **Ngưỡng tách đoạn phải đo trên dòng cùng cỡ thân bài.** Gộp cả khoảng cách trước tiêu đề và giữa ô bảng vào thì trung vị bị kéo lên, ngưỡng cao đến mức không đoạn nào tách được.
+
+- **Chữ đậm markdown mở đầu bằng `*`, y hệt mục danh sách.** Loại dòng danh sách bằng `startswith(("-", "*"))` là nuốt luôn `**Tiêu đề**`. Dấu danh sách phải đi kèm khoảng trắng mới tính.
 
 - **`extract_images=False` KHÔNG có nghĩa là bỏ ảnh — mammoth sẽ nhúng base64.** Đây là cái bẫy đã làm hỏng hẳn file .md. Không truyền `convert_image` thì mammoth dùng mặc định `data_uri`, tức nhúng thẳng base64 vào markdown. Tên cờ nói "không tách ảnh" mà hành vi lại là thứ tệ nhất trong các lựa chọn. Đo thật trên tài liệu 195 ảnh: **22 MB** markdown với mỗi dòng ảnh dài hàng trăm nghìn ký tự, thay vì **22 KB** — trình soạn thảo treo, không đọc nổi chữ. Phải LUÔN đặt `convert_image`, và khi bỏ ảnh thì cần thêm `strip=["img"]` cho markdownify vì thẻ `<img />` rỗng vẫn còn lại thành `![]()`.
 

@@ -105,6 +105,35 @@ def _build_xlsx(dest: Path) -> None:
     wb.save(dest)
 
 
+def _build_docx_broken_headings(dest: Path) -> None:
+    """Tài liệu dùng Heading style nửa vời — đúng bệnh của hồ sơ thầu thật.
+
+    "3.1." và "3.1.1." chỉ là đoạn văn thường; "3.1.1.1." có Heading 3;
+    "3.2.2.1.1." có Heading 5 (lệch hẳn với cái trên). Kèm hai cái bẫy: mục danh
+    sách "1." và đoạn văn dài mở đầu bằng "3.3.".
+    """
+    from docx import Document
+
+    d = Document()
+    p = d.add_paragraph()
+    p.add_run("GIẢI PHÁP VÀ PHƯƠNG PHÁP LUẬN TỔNG QUÁT").bold = True
+
+    d.add_paragraph("3.1. Hiểu rõ mục đích gói thầu")
+    d.add_paragraph("3.1.1. Am hiểu về mục tiêu của dự án đã nêu trong điều khoản tham chiếu")
+    d.add_heading("3.1.1.1. Giới thiệu chung về dự án:", level=3)
+    d.add_paragraph("Tên dự án: Xây dựng hạ tầng trạm BTS.")
+    d.add_paragraph("3.2. Cách tiếp cận và phương pháp luận")
+    d.add_paragraph("3.2.2. Công tác khảo sát")
+    d.add_heading("3.2.2.1.1. Các tiêu chuẩn áp dụng:", level=5)
+    d.add_paragraph("1. Mỗi đội khảo sát gồm 01 cán bộ khảo sát.")
+    d.add_paragraph("2. Thời gian khảo sát không quá 5 ngày.")
+    d.add_paragraph(
+        "3.3. Theo quy định tại mục 3.1. của hợp đồng, nhà thầu phải hoàn thành "
+        "toàn bộ công tác khảo sát và bàn giao hồ sơ trước thời hạn đã nêu."
+    )
+    d.save(dest)
+
+
 def _build_docx_with_images(dest: Path) -> None:
     """Tài liệu Word có ảnh — thứ từng làm phình file .md lên hàng chục MB."""
     from docx import Document
@@ -206,6 +235,10 @@ def fixtures() -> dict[str, Path]:
         _build_docx(paths["docx"])
     if not paths["xlsx"].exists():
         _build_xlsx(paths["xlsx"])
+
+    if not (FIXTURES / "heading_loi.docx").exists():
+        _build_docx_broken_headings(FIXTURES / "heading_loi.docx")
+    paths["heading_docx"] = FIXTURES / "heading_loi.docx"
 
     if not (FIXTURES / "co_anh.docx").exists():
         _build_docx_with_images(FIXTURES / "co_anh.docx")
