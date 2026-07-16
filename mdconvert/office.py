@@ -57,6 +57,19 @@ def _image_handler(assets_dir: Path):
     return handler
 
 
+@mammoth.images.inline
+def _drop_image(image):
+    """Bỏ hẳn ảnh, KHÔNG nhúng base64.
+
+    Đây là cái bẫy đã làm hỏng file .md: mammoth mặc định dùng data_uri, tức nhúng
+    thẳng base64 vào. Chỉ cần không truyền convert_image là dính ngay — tên cờ nói
+    "không tách ảnh" mà hành vi lại là nhúng inline, thứ tệ nhất trong các lựa
+    chọn. Tài liệu 195 ảnh cho ra file .md nặng 25-76 MB, mỗi dòng ảnh dài hàng
+    trăm nghìn ký tự: trình soạn thảo treo, không đọc nổi chữ.
+    """
+    return []
+
+
 def _is_blank_row(line: str) -> bool:
     return bool(re.fullmatch(r"\|(\s*\|)+", line.strip()))
 
@@ -134,18 +147,23 @@ def _read_docx(path: Path, assets_dir: Path, extract_images: bool) -> tuple[str,
             f"File có thể bị hỏng hoặc chỉ được đổi tên phần đuôi."
         )
 
-    opts: dict = {"style_map": STYLE_MAP}
-    if extract_images:
-        opts["convert_image"] = _image_handler(assets_dir)
+    # PHẢI luôn đặt convert_image. Bỏ trống là mammoth tự nhúng base64.
+    opts: dict = {
+        "style_map": STYLE_MAP,
+        "convert_image": _image_handler(assets_dir) if extract_images else _drop_image,
+    }
 
     with open(path, "rb") as f:
         result = mammoth.convert_to_html(f, **opts)
 
+    # _drop_image chặn được base64 nhưng vẫn để lại thẻ <img /> rỗng, mà
+    # markdownify sẽ biến chúng thành "![]()" rác. Phải bỏ luôn thẻ.
+    strip = ["span"] if extract_images else ["span", "img"]
     md = markdownify(
         result.value,
         heading_style="ATX",
         bullets="-",
-        strip=["span"],
+        strip=strip,
     )
     md = _fix_empty_table_headers(md)
     md = re.sub(r"\n{3,}", "\n\n", md).strip() + "\n"

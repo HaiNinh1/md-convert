@@ -105,6 +105,36 @@ def _build_xlsx(dest: Path) -> None:
     wb.save(dest)
 
 
+def _build_docx_with_images(dest: Path) -> None:
+    """Tài liệu Word có ảnh — thứ từng làm phình file .md lên hàng chục MB."""
+    from docx import Document
+    from docx.shared import Inches
+    from PIL import Image
+
+    tmp = dest.parent / "_tam_img"
+    tmp.mkdir(exist_ok=True)
+    shots = []
+    for i, color in enumerate([(220, 70, 60), (60, 140, 220), (80, 180, 100)], 1):
+        p = tmp / f"{i}.png"
+        Image.new("RGB", (400, 260), color).save(p)
+        shots.append(p)
+
+    d = Document()
+    d.add_heading("Tài liệu có ảnh", level=1)
+    d.add_paragraph("Đoạn văn trước ảnh thứ nhất.")
+    d.add_picture(str(shots[0]), width=Inches(3))
+    d.add_paragraph("Đoạn văn giữa hai ảnh.")
+    d.add_picture(str(shots[1]), width=Inches(3))
+    d.add_heading("Mục có ảnh", level=2)
+    d.add_paragraph("Đoạn cuối.")
+    d.add_picture(str(shots[2]), width=Inches(2))
+    d.save(dest)
+
+    for p in shots:
+        p.unlink()
+    tmp.rmdir()
+
+
 def _build_legacy_doc(dest: Path) -> bool:
     """Tạo file .doc nhị phân thật (Word 97-2003). Cần có Microsoft Word.
 
@@ -176,6 +206,10 @@ def fixtures() -> dict[str, Path]:
         _build_docx(paths["docx"])
     if not paths["xlsx"].exists():
         _build_xlsx(paths["xlsx"])
+
+    if not (FIXTURES / "co_anh.docx").exists():
+        _build_docx_with_images(FIXTURES / "co_anh.docx")
+    paths["img_docx"] = FIXTURES / "co_anh.docx"
 
     # .doc cần Microsoft Word để tạo; máy nào không có thì test liên quan tự bỏ qua.
     doc = FIXTURES / "tailieu_cu.doc"

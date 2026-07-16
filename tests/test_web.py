@@ -127,12 +127,24 @@ def test_ten_file_khong_thoat_ra_ngoai_thu_muc_tam(client, fixtures):
     assert ".." not in res["out"]
 
 
-def test_zip(client, fixtures):
-    r = client.post("/api/zip", json=[
-        {"name": "Báo cáo.md", "markdown": "# Xin chào"},
-        {"name": "Hợp đồng.md", "markdown": "# Điều khoản"},
-    ])
-    assert r.status_code == 200
-    z = zipfile.ZipFile(io.BytesIO(r.data))
-    assert set(z.namelist()) == {"Báo cáo.md", "Hợp đồng.md"}
-    assert z.read("Báo cáo.md").decode() == "# Xin chào"
+def test_zip_giu_ten_file_tieng_viet(client, fixtures):
+    """Gói zip dựng từ token server trả về, không phải từ dữ liệu trình duyệt gửi
+    ngược lên — vì zip còn chứa cả ảnh, không có lý do gì đẩy byte ảnh xuống
+    trình duyệt rồi nhận lại."""
+    r = client.post(
+        "/api/convert",
+        data={
+            "files": [
+                (fixtures["docx"].open("rb"), "Hợp đồng.docx"),
+                (fixtures["pdf"].open("rb"), "Báo cáo.pdf"),
+            ],
+            "images": "0",
+        },
+        content_type="multipart/form-data",
+    )
+    token = r.get_json()["token"]
+    assert token
+
+    z = zipfile.ZipFile(io.BytesIO(client.get(f"/api/zip/{token}").data))
+    assert set(z.namelist()) == {"Hợp đồng.md", "Báo cáo.md"}
+    assert "# Báo cáo Kỹ thuật Quý IV" in z.read("Báo cáo.md").decode("utf-8")

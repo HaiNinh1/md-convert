@@ -10,8 +10,10 @@ chạy offline, không gọi ra Internet.
 from __future__ import annotations
 
 import io
+import secrets
 import tempfile
 import zipfile
+from collections import OrderedDict
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template_string, request, send_file
@@ -151,6 +153,7 @@ PAGE = """<!doctype html>
           <option value="eng">Tiếng Anh</option>
         </select>
       </label>
+      <label class="opt"><input type="checkbox" id="images" checked> Kèm ảnh</label>
       <label class="opt"><input type="checkbox" id="force"> Ép OCR</label>
     </div>
     <div class="bar" id="bar"><i></i></div>
@@ -203,6 +206,7 @@ $("#go").onclick = async () => {
   files.forEach(f => fd.append("files", f));
   fd.append("lang", $("#lang").value);
   fd.append("force_ocr", $("#force").checked ? "1" : "0");
+  fd.append("images", $("#images").checked ? "1" : "0");
 
   $("#go").disabled = true;
   $("#go").textContent = "Đang chuyển...";
@@ -222,22 +226,24 @@ $("#go").onclick = async () => {
   }
 };
 
-let lastOk = [];
+let lastOk = [], lastToken = null;
 function show(d) {
   lastOk = d.results.filter(r => r.ok);
+  lastToken = d.token;
   const bad = d.results.filter(r => !r.ok);
   let h = `<div class="card"><div class="sum">
     <span>Thành công: <b class="ok-t">${lastOk.length}/${d.results.length}</b></span>
     <span>Thất bại: <b class="${bad.length ? "err-t" : ""}">${bad.length}/${d.results.length}</b></span>
     <span style="flex:1"></span>`;
-  if (lastOk.length) h += `<button class="ghost" onclick="zipAll()">Tải tất cả (.zip)</button>`;
+  const nAssets = lastOk.reduce((s, r) => s + (r.assets || 0), 0);
+  if (lastOk.length) h += `<button class="ghost" onclick="zipAll()">Tải tất cả${nAssets ? ` + ${nAssets} ảnh` : ""} (.zip)</button>`;
   h += `</div></div>`;
 
   for (const r of d.results) {
     if (r.ok) {
       h += `<details class="res"><summary>
         <span class="ok-t">✓</span><span class="nm">${esc(r.out)}</span>
-        <span class="tag">${esc(r.detail)}</span>
+        <span class="tag">${esc(r.detail)}${r.assets ? ` · ${r.assets} ảnh` : ""}</span>
         <button class="dl" onclick="event.preventDefault();dl('${esc(r.out)}')">Tải về</button>
       </summary><pre>${esc(r.markdown)}</pre></details>`;
     } else {
@@ -261,11 +267,11 @@ function dl(name) {
 }
 
 async function zipAll() {
-  const r = await fetch("/api/zip", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(lastOk.map(x => ({ name: x.out, markdown: x.markdown }))),
-  });
+  if (!lastToken) return;
+  // Tai zip tu server chu khong dung du lieu o trinh duyet: goi zip con chua ca
+  // anh, khong co ly do gi de day byte anh xuong day roi nhan nguoc len.
+  const r = await fetch("/api/zip/" + encodeURIComponent(lastToken));
+  if (!r.ok) { alert("Kết quả đã hết hạn, hãy chuyển đổi lại."); return; }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(await r.blob());
   a.download = "markdown.zip";
@@ -290,16 +296,47 @@ def favicon():
     return send_file(icon, mimetype="image/vnd.microsoft.icon")
 
 
+# Giữ kết quả của vài lần chuyển gần nhất để dựng file .zip, tránh phải gửi
+# byte ảnh xuống trình duyệt rồi lại nhận ngược lên. Chỉ giữ vài lô gần nhất để
+# không phình bộ nhớ — đây là công cụ chạy một mình trên máy, không phải web
+# server nhiều người dùng.
+_STORE: "OrderedDict[str, dict]" = OrderedDict()
+_STORE_MAX_BATCHES = 3
+
+
+def _remember(files: dict[str, bytes]) -> str:
+    token = secrets.token_urlsafe(12)
+    _STORE[token] = files
+    while len(_STORE) > _STORE_MAX_BATCHES:
+        _STORE.popitem(last=False)
+    return token
+
+
+def _collect_assets(assets_dir: Path) -> dict[str, bytes]:
+    if not assets_dir.is_dir():
+        return {}
+    return {
+        f"{assets_dir.name}/{f.name}": f.read_bytes()
+        for f in sorted(assets_dir.iterdir())
+        if f.is_file()
+    }
+
+
 @app.post("/api/convert")
 def api_convert():
     uploads = request.files.getlist("files")
     if not uploads:
-        return jsonify({"results": []})
+        return jsonify({"results": [], "token": None})
 
     lang = request.form.get("lang", "vie")
     force_ocr = request.form.get("force_ocr") == "1"
+    # Mặc định GIỮ ảnh. Ảnh được tách ra file riêng rồi gói chung vào .zip —
+    # không bao giờ nhúng base64 vào markdown.
+    with_images = request.form.get("images", "1") == "1"
 
     results = []
+    bundle: dict[str, bytes] = {}
+
     # Thư mục tạm bị xoá ngay khi xong: file người dùng tải lên không có lý do gì
     # để nằm lại trên đĩa.
     with tempfile.TemporaryDirectory(prefix="mdconvert-") as tmp:
@@ -321,7 +358,7 @@ def api_convert():
             out_dir.mkdir(exist_ok=True)
 
             try:
-                kw: dict = {"extract_images": False}
+                kw: dict = {"extract_images": with_images}
                 if src.suffix.lower() == ".pdf":
                     kw.update(ocr_lang=lang, dpi=300, force_ocr=force_ocr)
                 md, stats = convert_file(src, out_dir, **kw)
@@ -351,22 +388,32 @@ def api_convert():
                 })
                 continue
 
+            stem = Path(name).stem
+            out_name = f"{stem}.md"
+            assets = _collect_assets(out_dir / f"{stem}_assets") if with_images else {}
+            bundle[out_name] = md.encode("utf-8")
+            bundle.update(assets)
+
             results.append({
-                "ok": True, "name": name, "out": f"{Path(name).stem}.md",
+                "ok": True, "name": name, "out": out_name,
                 "markdown": md, "detail": _describe(stats),
+                "assets": len(assets),
             })
 
-    return jsonify({"results": results})
+    token = _remember(bundle) if bundle else None
+    return jsonify({"results": results, "token": token})
 
 
-@app.post("/api/zip")
-def api_zip():
-    items = request.get_json(silent=True) or []
+@app.get("/api/zip/<token>")
+def api_zip(token: str):
+    files = _STORE.get(token)
+    if not files:
+        return ("Kết quả đã hết hạn, hãy chuyển đổi lại.", 404)
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for it in items:
-            name = Path(str(it.get("name", "khong-ten.md"))).name
-            z.writestr(name, str(it.get("markdown", "")))
+        for name, data in files.items():
+            z.writestr(name, data)
     buf.seek(0)
     return send_file(buf, mimetype="application/zip",
                      as_attachment=True, download_name="markdown.zip")
