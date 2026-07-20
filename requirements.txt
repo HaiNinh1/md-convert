@@ -8,6 +8,7 @@ watchdog>=4.0        # theo dõi thư mục cho chế độ tự động
 # OCR cho PDF scan
 pytesseract>=0.3.10  # cầu nối tới Tesseract
 pillow>=10.0         # đưa ảnh trang vào Tesseract
+spylls>=0.1.7        # sửa chính tả tiếng Việt sau OCR (hunspell thuần Python)
 
 # Ngoài pip, cần cài Tesseract một lần:
 #     winget install --id tesseract-ocr.tesseract

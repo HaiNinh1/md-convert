@@ -26,14 +26,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .model import Line, Span
+from .runtime import resource_dir
 
+# Tesseract đi kèm khi đóng gói (thư mục tesseract/ trong bản .exe) được ưu tiên,
+# rồi mới tới bản cài trên máy.
 TESSERACT_CANDIDATES = [
+    resource_dir() / "tesseract" / "tesseract.exe",
     Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
     Path(r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"),
 ]
 
-# Thư mục tessdata ưu tiên: bản của OCR-Offline có sẵn vie + vie_best.
+# Thư mục tessdata: ưu tiên bản đi kèm, rồi bản của OCR-Offline (có vie + vie_best).
 TESSDATA_CANDIDATES = [
+    resource_dir() / "tessdata",
+    Path(r"C:\Working\OCR\OCR-Offline\tessdata"),
     Path(r"C:\Works\OCR2\OCR-Offline\tessdata"),
     Path(r"C:\Program Files\Tesseract-OCR\tessdata"),
 ]
@@ -120,7 +126,7 @@ def _page_to_image(page, dpi: int):
     return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
 
-def ocr_page_lines(engine: Engine, page, dpi: int = 300) -> list[Line]:
+def ocr_page_lines(engine: Engine, page, dpi: int = 300, psm: int = 3) -> list[Line]:
     """OCR một trang, trả về các Line theo đúng thứ tự đọc.
 
     Dùng image_to_data thay vì lấy text thuần: nó trả về khung của TỪNG TỪ kèm
@@ -148,7 +154,7 @@ def ocr_page_lines(engine: Engine, page, dpi: int = 300) -> list[Line]:
         # Đo trên bản scan mẫu: thiếu cờ này ra 81 từ và mất sạch bảng, có cờ
         # thì ra 100 từ và bảng đầy đủ. Gán img.info["dpi"] không ăn thua vì
         # pytesseract không truyền tiếp.
-        config=f"--psm 3 --dpi {dpi}",
+        config=f"--psm {psm} --dpi {dpi}",
         output_type=pytesseract.Output.DICT,
     )
 
@@ -266,3 +272,29 @@ def _size_from_wpc(wpc: float) -> float:
     if wpc <= 0:
         wpc = 5.0
     return min(max(round(wpc * CHAR_WIDTH_TO_PT, 1), SIZE_CLAMP[0]), SIZE_CLAMP[1])
+
+
+def ocr_image_text(engine: Engine, image, *, psm: int = 6, dpi: int = 200) -> str:
+    """OCR một ảnh bất kỳ, trả về chữ thuần (dùng cho công cụ chọn vùng).
+
+    Khác ocr_page_lines ở chỗ không cần toạ độ hay quan hệ dòng để dò layout —
+    người dùng đã tự khoanh vùng, ta chỉ việc đọc chữ trong vùng đó và trả lại.
+
+    psm mặc định 6 (một khối chữ đồng nhất). Với vùng đúng một dòng thì psm 7
+    cho kết quả gọn hơn; giao diện cho chọn.
+    """
+    import pytesseract
+
+    pytesseract.pytesseract.tesseract_cmd = engine.exe
+    # Xem chú thích ở ocr_page_lines: truyền tessdata qua biến môi trường, không
+    # qua cờ, để đường dẫn có dấu cách không bị xé.
+    os.environ["TESSDATA_PREFIX"] = engine.tessdata
+
+    text = pytesseract.image_to_string(
+        image,
+        lang=engine.lang,
+        # --dpi giúp Tesseract chọn đúng thang xử lý; ảnh PIL không mang metadata
+        # này nên phải nói rõ, khớp với DPI đã render trang ở snip.py.
+        config=f"--psm {psm} --dpi {dpi}",
+    )
+    return text.strip()

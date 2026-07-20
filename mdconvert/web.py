@@ -16,17 +16,20 @@ import zipfile
 from collections import OrderedDict
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template_string, request, send_file
+from flask import Flask, jsonify, redirect, render_template_string, request, send_file
 
 from .console import force_utf8
 from .ocr import TesseractMissing, find_tesseract
 from .office import LegacyDocError
+from .online_ocr import OnlineOCRError
 from .router import SUPPORTED, UnsupportedFile, convert_file
+from .snip import snip_bp
 
 MAX_UPLOAD_MB = 200
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+app.register_blueprint(snip_bp)
 
 
 PAGE = """<!doctype html>
@@ -111,6 +114,18 @@ PAGE = """<!doctype html>
     overflow-x: auto; font: 12.5px/1.65 Consolas, "Cascadia Mono", monospace;
     max-height: 380px; white-space: pre-wrap; word-break: break-word;
   }
+  .optrow { margin-top: 10px; }
+  .editwrap { border-top: 1px solid var(--line); padding: 10px; background: var(--code-bg); }
+  .fr { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .fri { padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px;
+         background: var(--card); color: var(--ink); font-size: 13px; }
+  .frn { font-size: 12.5px; color: var(--muted); }
+  textarea.edit {
+    width: 100%; box-sizing: border-box; min-height: 260px; max-height: 520px;
+    resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+    background: var(--card); color: var(--ink);
+    font: 12.5px/1.65 Consolas, "Cascadia Mono", monospace;
+  }
   .why { padding: 0 13px 13px; color: var(--err); font-size: 13.5px; }
   .note { font-size: 13px; color: var(--muted); margin-top: 18px; }
   .warn { background: rgba(200,55,45,.09); border: 1px solid var(--err);
@@ -124,7 +139,8 @@ PAGE = """<!doctype html>
 <body>
 <div class="wrap">
   <h1>md-convert</h1>
-  <p class="sub">Chuyển PDF, PDF scan, Word, Excel sang Markdown. Chạy offline hoàn toàn trên máy bạn.</p>
+  <p class="sub">Chuyển PDF, PDF scan, Word, Excel sang Markdown. Chạy offline hoàn toàn trên máy bạn.
+     — <a href="/snip" style="color:var(--accent);font-weight:600;text-decoration:none">← Chọn vùng ảnh → ra chữ (trang chính)</a></p>
 
   {% if not tesseract %}
   <div class="warn">
@@ -146,6 +162,10 @@ PAGE = """<!doctype html>
       <button class="go" id="go" disabled>Chuyển đổi</button>
       <button class="ghost" id="clr" hidden>Xoá hết</button>
       <span style="flex:1"></span>
+      <label class="opt"><input type="checkbox" id="images" checked> Kèm ảnh</label>
+      <label class="opt"><input type="checkbox" id="force"> Ép OCR</label>
+    </div>
+    <div class="row optrow">
       <label class="opt">Ngôn ngữ OCR:
         <select id="lang">
           <option value="vie">Tiếng Việt</option>
@@ -153,9 +173,31 @@ PAGE = """<!doctype html>
           <option value="eng">Tiếng Anh</option>
         </select>
       </label>
-      <label class="opt"><input type="checkbox" id="images" checked> Kèm ảnh</label>
-      <label class="opt"><input type="checkbox" id="force"> Ép OCR</label>
+      <label class="opt">Độ nét (DPI):
+        <select id="dpi">
+          <option value="200">200 — Nhanh</option>
+          <option value="300" selected>300 — Khuyên dùng</option>
+          <option value="400">400 — Chữ mờ/nhỏ</option>
+        </select>
+      </label>
+      <label class="opt">Kiểu trang:
+        <select id="psm">
+          <option value="3" selected>Tự động</option>
+          <option value="4">Cột/bảng điểm</option>
+          <option value="6">Giữ nguyên dòng</option>
+          <option value="11">Chữ thưa (nhiều ô)</option>
+        </select>
+      </label>
+      <label class="opt" title="Chỉ sửa sai dấu tiếng Việt, không đụng tên riêng/mã số">
+        <input type="checkbox" id="spell"> Sửa chính tả (OCR)
+      </label>
+      <label class="opt" title="Đọc scan tiếng Việt chính xác hơn nhiều, cần mạng"{% if not online %} style="opacity:.55"{% endif %}>
+        <input type="checkbox" id="online"{% if online %} checked{% else %} disabled{% endif %}> Độ chính xác cao (online){% if not online %} — chưa cấu hình khoá{% endif %}
+      </label>
     </div>
+    {% if not online %}
+    <p class="note" style="margin-top:8px">Muốn bật <b>OCR online chính xác cao</b> cho bản scan tiếng Việt: đặt biến môi trường <code>OCRSPACE_API_KEY</code> hoặc tạo file <code>ocrspace_key.txt</code> ở thư mục dự án (lấy khoá miễn phí tại ocr.space/ocrapi), rồi mở lại app.</p>
+    {% endif %}
     <div class="bar" id="bar"><i></i></div>
   </div>
 
@@ -207,6 +249,10 @@ $("#go").onclick = async () => {
   fd.append("lang", $("#lang").value);
   fd.append("force_ocr", $("#force").checked ? "1" : "0");
   fd.append("images", $("#images").checked ? "1" : "0");
+  fd.append("dpi", $("#dpi").value);
+  fd.append("psm", $("#psm").value);
+  fd.append("fix_spell", $("#spell").checked ? "1" : "0");
+  fd.append("online", $("#online").checked ? "1" : "0");
 
   $("#go").disabled = true;
   $("#go").textContent = "Đang chuyển...";
@@ -245,7 +291,15 @@ function show(d) {
         <span class="ok-t">✓</span><span class="nm">${esc(r.out)}</span>
         <span class="tag">${esc(r.detail)}${r.assets ? ` · ${r.assets} ảnh` : ""}</span>
         <button class="dl" onclick="event.preventDefault();dl('${esc(r.out)}')">Tải về</button>
-      </summary><pre>${esc(r.markdown)}</pre></details>`;
+      </summary><div class="editwrap">
+        <div class="fr">
+          <input class="fri" placeholder="Tìm chữ…">
+          <input class="fri" placeholder="Thay bằng…">
+          <button class="dl" onclick="frReplace(this)">Thay tất cả</button>
+          <span class="frn"></span>
+        </div>
+        <textarea class="edit" spellcheck="false" data-name="${esc(r.out)}">${esc(r.markdown)}</textarea>
+      </div></details>`;
     } else {
       h += `<details class="res"><summary>
         <span class="err-t">✗</span><span class="nm">${esc(r.name)}</span>
@@ -257,13 +311,32 @@ function show(d) {
 }
 
 function dl(name) {
+  // Ưu tiên nội dung trong ô đã sửa tay, không phải bản gốc từ máy chủ.
+  const ta = document.querySelector(`textarea.edit[data-name="${cssEsc(name)}"]`);
   const r = lastOk.find(x => x.out === name);
-  if (!r) return;
+  const text = ta ? ta.value : (r ? r.markdown : "");
+  if (!r && !ta) return;
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([r.markdown], { type: "text/markdown;charset=utf-8" }));
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
   a.download = name;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function cssEsc(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\\\"'); }
+
+// Tìm/thay thế trong đúng ô của kết quả này — dùng để vét nhanh một lỗi OCR
+// lặp lại nhiều lần (vd "câp" -> "cấp") mà không phải sửa từng chỗ.
+function frReplace(btn) {
+  const wrap = btn.closest(".editwrap");
+  const find = wrap.querySelector(".fri").value;
+  const rep = wrap.querySelectorAll(".fri")[1].value;
+  const ta = wrap.querySelector("textarea.edit");
+  const note = wrap.querySelector(".frn");
+  if (!find) { note.textContent = "Nhập chữ cần tìm."; return; }
+  const n = ta.value.split(find).length - 1;
+  ta.value = ta.value.split(find).join(rep);
+  note.textContent = n ? `Đã thay ${n} chỗ` : "Không tìm thấy";
 }
 
 async function zipAll() {
@@ -285,7 +358,18 @@ async function zipAll() {
 
 @app.get("/")
 def index():
-    return render_template_string(PAGE, tesseract=bool(find_tesseract()))
+    # Trang chủ là công cụ "Chọn vùng → ra chữ" — người dùng dùng luôn. Trang
+    # chuyển sang Markdown nằm ở /convert, dùng khi cần.
+    return redirect("/snip")
+
+
+@app.get("/convert")
+def convert_index():
+    from .online_ocr import available as online_available
+
+    return render_template_string(
+        PAGE, tesseract=bool(find_tesseract()), online=online_available()
+    )
 
 
 @app.get("/favicon.ico")
@@ -333,6 +417,23 @@ def api_convert():
     # Mặc định GIỮ ảnh. Ảnh được tách ra file riêng rồi gói chung vào .zip —
     # không bao giờ nhúng base64 vào markdown.
     with_images = request.form.get("images", "1") == "1"
+    fix_spell = request.form.get("fix_spell") == "1"
+    use_online = request.form.get("online") == "1"
+
+    online_key = None
+    if use_online:
+        from .online_ocr import get_api_key
+        online_key = get_api_key()
+
+    try:
+        dpi = int(request.form.get("dpi", "300"))
+    except ValueError:
+        dpi = 300
+    dpi = max(150, min(600, dpi))
+    try:
+        psm = int(request.form.get("psm", "3"))
+    except ValueError:
+        psm = 3
 
     results = []
     bundle: dict[str, bytes] = {}
@@ -360,7 +461,10 @@ def api_convert():
             try:
                 kw: dict = {"extract_images": with_images}
                 if src.suffix.lower() == ".pdf":
-                    kw.update(ocr_lang=lang, dpi=300, force_ocr=force_ocr)
+                    kw.update(
+                        ocr_lang=lang, dpi=dpi, psm=psm, force_ocr=force_ocr,
+                        use_online=use_online, online_key=online_key,
+                    )
                 md, stats = convert_file(src, out_dir, **kw)
             except LegacyDocError as e:
                 results.append({"ok": False, "name": name, "error": str(e)})
@@ -369,6 +473,12 @@ def api_convert():
                 results.append({
                     "ok": False, "name": name,
                     "error": f"Đây là bản scan nên cần OCR, nhưng: {e}",
+                })
+                continue
+            except OnlineOCRError as e:
+                results.append({
+                    "ok": False, "name": name,
+                    "error": f"OCR online không chạy được: {e}",
                 })
                 continue
             except UnsupportedFile as e:
@@ -387,6 +497,12 @@ def api_convert():
                     "error": "Không trích được nội dung nào từ file này.",
                 })
                 continue
+
+            # Sửa chính tả chỉ có nghĩa với tiếng Việt và chỉ nên chạm vào chữ do
+            # OCR đọc — file Word/Excel gõ tay không cần và không nên bị "sửa".
+            if fix_spell and "vie" in lang and stats.get("ocr_pages"):
+                from .spellfix import fix_text
+                md = fix_text(md)
 
             stem = Path(name).stem
             out_name = f"{stem}.md"

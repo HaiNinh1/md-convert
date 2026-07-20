@@ -201,6 +201,9 @@ def read_pdf(
     assets_dir: Path,
     ocr_lang: str = "vi",
     dpi: int = 300,
+    psm: int = 3,
+    use_online: bool = False,
+    online_key: str | None = None,
     extract_images_flag: bool = True,
     force_ocr: bool = False,
     on_page=None,
@@ -223,11 +226,17 @@ def read_pdf(
 
         if scanned:
             from .layout import tables_from_lines
-            from .ocr import get_engine, ocr_page_lines
 
-            if ocr_engine is None:
-                ocr_engine = get_engine(ocr_lang)
-            lines = ocr_page_lines(ocr_engine, page, dpi=dpi)
+            if use_online:
+                from .online_ocr import ocr_page_lines_online
+
+                lines = ocr_page_lines_online(page, dpi=dpi, api_key=online_key)
+            else:
+                from .ocr import get_engine, ocr_page_lines
+
+                if ocr_engine is None:
+                    ocr_engine = get_engine(ocr_lang)
+                lines = ocr_page_lines(ocr_engine, page, dpi=dpi, psm=psm)
             tables, lines = tables_from_lines(lines)
             images: list[ImageMarker] = []
             stats["ocr_pages"] += 1

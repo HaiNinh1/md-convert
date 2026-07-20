@@ -22,12 +22,25 @@ def client():
     return app.test_client()
 
 
-def test_trang_chu(client):
+def test_trang_chu_chuyen_huong_toi_snip(client):
+    # Trang chủ là công cụ chọn vùng — mở app vào thẳng đó.
     r = client.get("/")
+    assert r.status_code == 302
+    assert r.headers["Location"].rstrip("/").endswith("/snip")
+
+
+def test_trang_convert(client):
+    r = client.get("/convert")
     assert r.status_code == 200
     html = r.data.decode()
     assert "Kéo thả tài liệu" in html
     assert "/api/convert" in html
+
+
+def test_trang_snip(client):
+    r = client.get("/snip")
+    assert r.status_code == 200
+    assert "Chọn vùng" in r.data.decode()
 
 
 def test_convert_word_qua_web(client, fixtures):

@@ -26,7 +26,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-%PY% -c "import flask" 2>nul
+%PY% -c "import flask, spylls" 2>nul
 if errorlevel 1 (
     echo.
     echo   Lan dau chay: dang cai thu vien can thiet...

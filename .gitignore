@@ -22,6 +22,9 @@ tests/that/
 # File mau sinh tu dong (xem tests/conftest.py)
 tests/fixtures/
 
+# Khoa OCR online — TUYET DOI khong commit len repo
+ocrspace_key.txt
+
 # Cong cu
 .omc/
 

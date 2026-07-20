@@ -19,6 +19,8 @@ dependencies = [
     "pytesseract>=0.3.10",
     "pillow>=10.0",
     "flask>=3.0",
+    # Sua chinh ta tieng Viet sau OCR (hunspell thuan Python, doc vi_VN.dic/.aff).
+    "spylls>=0.1.7",
     # Doc file .doc doi cu qua Microsoft Word. Chi Windows.
     "pywin32>=306; sys_platform == 'win32'",
 ]
